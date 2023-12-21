@@ -25,12 +25,14 @@ public:
 
     void initRepo() {
         cout << "Initializing Spectre repository at " << repoPath << endl;
-        SpectreRepo repo = SpectreRepo("../");
+        SpectreRepo repo = SpectreRepo("./");
         repo.initRepo();
     }
 
     void cloneRepo() {
         cout << "Cloning Spectre repository from " << repoPath << endl;
+        SpectreRepo repo = SpectreRepo("./");
+        repo.cloneRepo(repoPath);
     }
 
 
@@ -46,18 +48,26 @@ private:
     }
 
     void cloneCommand() {
-        auto clone = app.add_subcommand("clone", "Clone a remote Spectre repository");
-        // Add options for clone command
-        string remoteURL;
-        clone->add_option("--remote", remoteURL, "URL of the remote repository")->required();
-        clone->callback([this] { cloneRepo(); });
+    auto clone = app.add_subcommand("clone", "Clone a remote Spectre repository");
+    string remoteURL;
+    cin>>remoteURL;
+    clone->callback([this, remoteURL] { 
+        repoPath = remoteURL;
+        try {
+            cloneRepo();
+        } catch (const std::exception& e) {
+            cerr << "Error during cloning: " << e.what() << endl;
+        } catch (...) {
+            cerr << "Unknown error during cloning" << endl;
+        }
+        });
     }
 };
 
 
 int main(int argc, char* argv[]){
     SpectreCLI cli(argc, argv);
-    SpectreRepo repo = SpectreRepo();
     cli.parse();
+    cout << "After parse()" << endl;
     return 0;
 }
