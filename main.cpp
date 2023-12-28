@@ -55,18 +55,27 @@ public:
     }
 
     void initRepo() {
+        if (repo.isInitialized()) {
+            cout << "Spectre repository already initialized" << endl;
+            return;
+        }
         cout << "Initializing Spectre repository at " << repoPath << endl;
         SpectreRepo repo = SpectreRepo("./");
         repo.initRepo();
     }
 
     void addCommand(vector<string> fileToAdd) {
+        if (!repo.isInitialized()) {
+            cout<<"Fatal: Not a Spectre repository (or any of the parent directories): .spectre"<<"\n";
+            return;
+        }
         cout << "Adding files to Spectre repository" << "\n";
         for (string file : fileToAdd) {
             cout << file << "\n";
         }
         repo.addFiles(fileToAdd);
     }
+
 
     void helpCommand(string helpCommand) {
         if (helpCommand == "init") {
@@ -83,10 +92,22 @@ public:
     }
 
     void logCommand() {
-        cout << "Log" << "\n";
+        if (!repo.isInitialized()) {
+            cout<<"Fatal: Not a Spectre repository (or any of the parent directories): .spectre"<<"\n";
+            return;
+        }
+        vector<Commit> commits = repo.log();
+        cout<<"Log"<<"\n";
+        for (Commit commit : commits) {
+            cout << commit.getMessage() << "\n";
+        }
     }
 
     void statusCommand() {
+        if (!repo.isInitialized()) {
+            cout<<"Fatal: Not a Spectre repository (or any of the parent directories): .spectre"<<"\n";
+            return;
+        }
         vector<string> changed= repo.getChangedFiles();
         for (string file : changed) {
             cout << file << "\n";
