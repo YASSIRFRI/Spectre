@@ -204,7 +204,7 @@ public:
         };
 
         auto handlePath = [&](const std::filesystem::path& path) {
-            if (path.filename().string()[0] == '.') {
+            if (path.filename().string()[0] == '.'&&path.filename().string() != ".spectreignore") {
                 return;
             }
             if (std::filesystem::is_regular_file(path)) {
@@ -244,7 +244,6 @@ public:
         std::string commitHash = commit.hash();
         std::filesystem::path commitDir = commitsDir / commitHash;
         std::filesystem::create_directories(commitDir);
-
         for (const auto& entry : std::filesystem::recursive_directory_iterator(stageDir)) {
             if (entry.is_regular_file()) {
                 std::filesystem::path relativePath = std::filesystem::relative(entry.path(), stageDir);
@@ -367,6 +366,7 @@ public:
         if (entry.is_directory()) {
             std::string commitDir = entry.path().string();
             std::string commitFile = commitDir + "/" + entry.path().filename().string() + ".sp.gz";
+            std::string commitId = entry.path().filename().string();
             std::vector<uint8_t> decompressedData = decompressFile(commitFile);
             std::string decompressedFileContent(decompressedData.begin(), decompressedData.end());
             std::istringstream inFile(decompressedFileContent);
@@ -382,33 +382,92 @@ public:
                     hash = line.substr(6);
                 }
             }
-            Commit commit(message, "Unknown", date); // Assuming the author is unknown as it's not in the commit info file
-            commits.push_back(commit);
+            map<std::string, std::string> info = getInfo();
+            if(info["author"] == "Unknown" || info.find("author") == info.end()){
+                info["author"] = "Unknown";
+            }
+            Commit newCommit(message,info["author"], date); 
+            newCommit.setId(commitId);
+            commits.push_back(newCommit);
         }
     }
     return commits;
     }
 
-    void revert(std::string commitId, std::string message){
-        std::filesystem::path commitDir(".spectre/.commits/" + commitId);
-        if (!std::filesystem::exists(commitDir)) {
+
+    void revert(std::string commitId, std::string message, bool hardReset = false) {
+        if (!commitExists(commitId)) {
             std::cerr << "Commit ID not found: " << commitId << "\n";
             return;
         }
-        std::filesystem::path stageDir(".spectre/.stage");
-        if (!std::filesystem::exists(stageDir)) {
-            std::filesystem::create_directory(stageDir);
+
+        if (!stageExists()) {
+            std::filesystem::create_directory(".spectre/.stage");
         }
-        for (const auto& entry : std::filesystem::directory_iterator(commitDir)) {
+
+        std::vector<std::string> filesToCommit = getFilesToCommit();
+
+        if (hardReset) {
+            performHardReset(filesToCommit, commitId, message);
+        } else {
+            checkForUncommittedChanges();
+        }
+
+        recreateCommitDirectory(commitId);
+    }
+
+    bool commitExists(const std::string& commitId) {
+        return std::filesystem::exists(".spectre/.commits/" + commitId);
+    }
+
+    bool stageExists() {
+        return std::filesystem::exists(".spectre/.stage");
+    }
+
+    std::vector<std::string> getFilesToCommit() {
+        std::vector<std::string> filesToCommit;
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(".")) {
+            if (!isIgnored(entry.path().string()) && entry.path().parent_path().filename().string()[0] != '.') {
+                filesToCommit.push_back(entry.path().string());
+            }
+        }
+        return filesToCommit;
+    }
+
+    void performHardReset(const std::vector<std::string>& filesToCommit, const std::string& commitId, const std::string& message) {
+        addFiles(filesToCommit);
+        commit("Commit before revert" + commitId + " " + message);
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(".")) {
+            if (!isIgnored(entry.path().string()) && entry.path().parent_path().filename().string()[0] != '.') {
+                std::filesystem::remove_all(entry.path());
+            }
+        }
+    }
+
+    void checkForUncommittedChanges() {
+        if (stageExists()) {
+            std::vector<std::string> filesToCommit = getChangedFiles();
+            if (!filesToCommit.empty()) {
+                throw std::runtime_error("You have uncommitted changes. Please commit or stash them before reverting.");
+            }
+        }
+    }
+
+    void recreateCommitDirectory(const std::string& commitId) {
+        std::filesystem::path commitDir(".spectre/.commits/" + commitId);
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(commitDir)) {
             if (entry.is_regular_file()) {
                 std::vector<uint8_t> decompressedData = decompressFile(entry.path().string()); // Assuming decompressFile function is available
-                std::ofstream outFile(stageDir / entry.path().filename(), std::ios::binary);
+                std::filesystem::path relativePath = std::filesystem::relative(entry.path(), commitDir);
+                std::filesystem::path dest = "." / relativePath;
+                std::filesystem::create_directories(dest.parent_path());
+                std::ofstream outFile(dest, std::ios::binary);
                 outFile.write(reinterpret_cast<const char*>(decompressedData.data()), decompressedData.size());
             }
         }
-        commit(message); 
     }
 
+    
 private:
     path  p;
 };

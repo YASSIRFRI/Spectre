@@ -31,6 +31,9 @@ public:
     std::vector<std::string> getFiles() const {
         return files;
     }
+    std::string getId() const {
+        return id;
+    }
 
     std::string toString() const {
         std::string commitString = "commit " + hash() + "\n";
@@ -52,10 +55,23 @@ public:
     void setMessage(const std::string& message) {
         this->message = message;
     }
+    
+    void setAuthor(const std::string& author) {
+        this->author = author;
+    }
+    
+    void setDate(const std::string& date) {
+        this->date = date;
+    }
+
+    void setId(const std::string& id) {
+        this->id = id;
+    }
 
 private:
     std::string message;
     std::string author;
     std::string date;
+    std::string id;
     std::vector<std::string> files={};
 };

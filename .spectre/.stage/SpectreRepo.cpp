@@ -244,7 +244,6 @@ public:
         std::string commitHash = commit.hash();
         std::filesystem::path commitDir = commitsDir / commitHash;
         std::filesystem::create_directories(commitDir);
-
         for (const auto& entry : std::filesystem::recursive_directory_iterator(stageDir)) {
             if (entry.is_regular_file()) {
                 std::filesystem::path relativePath = std::filesystem::relative(entry.path(), stageDir);
@@ -270,14 +269,10 @@ public:
         std::stringstream ss;
         ss << inFile.rdbuf();
         std::string inData = ss.str();
-
         size_t numThreads = std::thread::hardware_concurrency();
         size_t chunkSize = (inData.size() + numThreads - 1) / numThreads;
-
         std::vector<std::string> outStrings(numThreads);
-
         std::vector<std::thread> threads(numThreads);
-
         for (size_t i = 0; i < numThreads; ++i) {
             threads[i] = std::thread([&, i]() {
                 z_stream zs;
@@ -300,11 +295,9 @@ public:
                 deflateEnd(&zs);
             });
         }
-
         for (auto& thread : threads) {
             thread.join();
         }
-
         std::string outData;
         for (const auto& outString : outStrings) {
             outData += outString;
@@ -313,39 +306,6 @@ public:
         std::ofstream outFile(outFilename, std::ios::binary);
         outFile.write(outData.data(), outData.size());
     } 
-
-   // void compressFile(const std::string& inFilename, const std::string& outFilename) {
-        //std::ifstream inFile(inFilename, std::ios::binary);
-        //std::stringstream ss;
-        //ss << inFile.rdbuf();
-        //std::string inData = ss.str();
-        //z_stream zs;
-        //memset(&zs, 0, sizeof(zs));
-        //if (deflateInit2(&zs, Z_BEST_COMPRESSION, Z_DEFLATED, 15 | 16, 8, Z_DEFAULT_STRATEGY) != Z_OK) {
-            //throw(std::runtime_error("deflateInit failed while compressing."));
-        //}
-        //zs.next_in = (Bytef*)inData.data();
-        //zs.avail_in = inData.size();
-        //int ret;
-        //char outbuffer[32768];
-        //std::string outstring;
-        //do {
-            //zs.next_out = reinterpret_cast<Bytef*>(outbuffer);
-            //zs.avail_out = sizeof(outbuffer);
-            //ret = deflate(&zs, Z_FINISH);
-            //if (outstring.size() < zs.total_out) {
-                //outstring.append(outbuffer, zs.total_out - outstring.size());
-            //}
-        //} while (ret == Z_OK);
-        //deflateEnd(&zs);
-        //if (ret != Z_STREAM_END) {
-            //std::ostringstream oss;
-            //oss << "Exception during zlib compression: (" << ret << ") " << zs.msg;
-            //throw(std::runtime_error(oss.str()));
-        //}
-        //std::ofstream outFile(outFilename, std::ios::binary);
-        //outFile.write(outstring.data(), outstring.size());
-    //}
 
     std::vector<std::string> getStagedFiles() {
         std::vector<std::string> unchangedFiles;
@@ -406,6 +366,7 @@ public:
         if (entry.is_directory()) {
             std::string commitDir = entry.path().string();
             std::string commitFile = commitDir + "/" + entry.path().filename().string() + ".sp.gz";
+            std::string commitId = entry.path().filename().string();
             std::vector<uint8_t> decompressedData = decompressFile(commitFile);
             std::string decompressedFileContent(decompressedData.begin(), decompressedData.end());
             std::istringstream inFile(decompressedFileContent);
@@ -421,14 +382,19 @@ public:
                     hash = line.substr(6);
                 }
             }
-            Commit commit(message, "Unknown", date); // Assuming the author is unknown as it's not in the commit info file
-            commits.push_back(commit);
+            map<std::string, std::string> info = getInfo();
+            if(info["author"] == "Unknown" || info.find("author") == info.end()){
+                info["author"] = "Unknown";
+            }
+            Commit newCommit(message,info["author"], date); 
+            newCommit.setId(commitId);
+            commits.push_back(newCommit);
         }
     }
     return commits;
     }
 
-    void revert(std::string commitId, std::string message){
+    void revert(std::string commitId, std::string message, bool hardReset = false){
         std::filesystem::path commitDir(".spectre/.commits/" + commitId);
         if (!std::filesystem::exists(commitDir)) {
             std::cerr << "Commit ID not found: " << commitId << "\n";
@@ -438,16 +404,39 @@ public:
         if (!std::filesystem::exists(stageDir)) {
             std::filesystem::create_directory(stageDir);
         }
-        for (const auto& entry : std::filesystem::directory_iterator(commitDir)) {
+
+        std::vector<std::string> filesToCommit;
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(".")) {
             if (entry.is_regular_file()) {
-                std::vector<uint8_t> decompressedData = decompressFile(entry.path().string()); // Assuming decompressFile function is available
-                std::ofstream outFile(stageDir / entry.path().filename(), std::ios::binary);
-                outFile.write(reinterpret_cast<const char*>(decompressedData.data()), decompressedData.size());
+                filesToCommit.push_back(entry.path().string());
             }
         }
+        addFiles(filesToCommit);
+        commit("Commit before revert");
+
+        if (hardReset) {
+            for (const auto& entry : std::filesystem::directory_iterator(".")) {
+                std::filesystem::remove_all(entry.path());
+            }
+        }
+
+        std::vector<std::string> filesToAdd;
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(commitDir)) {
+            if (entry.is_regular_file()) {
+                std::vector<uint8_t> decompressedData = decompressFile(entry.path().string()); // Assuming decompressFile function is available
+                std::filesystem::path relativePath = std::filesystem::relative(entry.path(), commitDir);
+                std::filesystem::path dest = "." / relativePath;
+                std::filesystem::create_directories(dest.parent_path());
+                std::ofstream outFile(dest, std::ios::binary);
+                outFile.write(reinterpret_cast<const char*>(decompressedData.data()), decompressedData.size());
+                filesToAdd.push_back(dest.string());
+            }
+        }
+        addFiles(filesToAdd);
         commit(message); 
     }
 
+    
 private:
     path  p;
 };

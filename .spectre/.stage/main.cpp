@@ -60,19 +60,16 @@ public:
             string commitMessage = argv[3];
             commitCommand(commitMessage);
         } else if(command == "revert") {
-            cout << "Revert" << "\n";
-            if (argc < 4) {
+                cout << "Revert" << "\n";
                 if (argc < 3) {
                     cout << "No commit hash provided" << endl;
                     return;
                 }
-                cout << "No commit message provided" << endl;
-                return;
-            }
-            string commitHash = argv[2];
-            string commitMessage = argv[3];
-            repo.revert(commitHash, commitMessage);
-        } else if (command=="ignore"){
+                string commitHash = argv[2];
+                string commitMessage = (argc > 3) ? argv[3] : ""; 
+                bool hardReset = (argc > 4) && (string(argv[4]) == "--hard");
+                repo.revert(commitHash, commitMessage, hardReset);
+            }else if (command=="ignore"){
             if (argc < 3) {
                 cout << "No file provided for ignore command" << endl;
                 helpCommand("ignore");
@@ -161,8 +158,8 @@ public:
             cout<<commit.getDate()<<"\n";
             cout<<"Commit Message:";
             cout << commit.getMessage() << "\n";
-            cout<<"Commit Hash: ";
-            cout << commit.hash() << "\n";
+            cout<<"Commit id: ";
+            cout << commit.getId()<< "\n";
         }
     }
 
