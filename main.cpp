@@ -23,6 +23,10 @@ public:
         if (command == "init") {
             initRepo();
         } else if (command == "add") {
+            if (!repo.isInitialized()) {
+                cout<<red<<"Fatal: Not a Spectre repository (or any of the parent directories): .spectre"<<reset<<"\n";
+                return;
+            }
             if (argc < 3) {
                 cout << "No file provided for add command" << endl;
                 return;
@@ -41,11 +45,23 @@ public:
             }
             helpCommand(helpcommand);
         } else if (command == "log") {
+            if (!repo.isInitialized()) {
+                cout<<red<<"Fatal: Not a Spectre repository (or any of the parent directories): .spectre"<<reset<<"\n";
+                return;
+            }
             logCommand();
         } else if (command == "status") {
+            if (!repo.isInitialized()) {
+                cout<<red<<"Fatal: Not a Spectre repository (or any of the parent directories): .spectre"<<reset<<"\n";
+                return;
+            }
             statusCommand();
         } else if (command == "commit") {
-            cout << "Commit " << argv[2] << "\n";
+            if (!repo.isInitialized()) {
+                cout<<red<<"Fatal: Not a Spectre repository (or any of the parent directories): .spectre"<<reset<<"\n";
+                return;
+            }
+            cout << "Commiting .... " << argv[2] << "\n";
             cout<<argc<<"\n";
             if(argc < 3 ){
                 cout<<(argc<3)<<"\n";
@@ -60,7 +76,11 @@ public:
             string commitMessage = argv[3];
             commitCommand(commitMessage);
         } else if(command == "revert") {
-                cout << "Revert" << "\n";
+            if (!repo.isInitialized()) {
+                cout<<red<<"Fatal: Not a Spectre repository (or any of the parent directories): .spectre"<<reset<<"\n";
+                return;
+            }
+                cout << "Reverting .... " << "\n";
                 if (argc < 3) {
                     cout << "No commit hash provided" << endl;
                     return;
@@ -85,7 +105,20 @@ public:
                 filesToIgnore.push_back(argv[i]);
             }
             ignoreCommand(filesToIgnore);
-        }else{
+        } else if(command=="save"){
+            if (!repo.isInitialized()) {
+                cout<<"Fatal: Not a Spectre repository (or any of the parent directories): .spectre"<<"\n";
+                return;
+            }
+            if (argc < 3) {
+                cout << "No commit message provided" << endl;
+                return;
+            }
+            string commitMessage = argv[2];
+            addCommand(repo.getChangedFiles());
+            commitCommand(commitMessage);
+        }
+        else{
             cout<<"Command not found"<<"\n";
         }
     }
@@ -129,7 +162,9 @@ public:
             cout << "ignore: Adds files to the .spectreignore file" << "\n";
         } else if (helpCommand == "config") {
             cout << "config: Sets the author and email for the repository" << "\n";
-        } else {
+        } else if(helpCommand=="save"){
+            cout<<"save: Saves the current state of the repository"<<"\n";
+        }else {
             cout<<yellow<<"Spectre Help"<<"\n"<<reset;
             cout<<"Usage: spectre <command> [<args>]"<<"\n";
             cout<<yellow<<"\tcommands:"<<"\n"<<reset;
@@ -142,6 +177,10 @@ public:
             cout<<"\t\tignore: Adds files to the .spectreignore file"<<"\n"<<reset;
             cout<<"\t\tconfig: Sets the author and email for the repository"<<"\n"<<reset;
             cout<<yellow<<"\targs:"<<"\n"<<reset;
+            cout<<"\t\t--author: Sets the author for the repository"<<"\n";
+            cout<<"\t\t--email: Sets the email for the repository"<<"\n";
+            cout<<"\t\t-m: Sets the commit message"<<"\n";
+            cout<<"\t\t--hard: Resets the repository to the commit"<<"\n"<<reset;
         }
     }
 

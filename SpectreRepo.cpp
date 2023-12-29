@@ -44,6 +44,11 @@ public:
     }
 
     void initRepo(){
+        cout << "################################\n";
+        cout << "#                              #\n";
+        cout << "#         S P E C T R E        #\n";
+        cout << "#                              #\n";
+        cout << "################################\n";
         path spectrePath = p / ".spectre";
         cout << "Initializing Spectre repository in " << p << "\n";
         HANDLE hStdin = GetStdHandle(STD_INPUT_HANDLE); 
@@ -69,6 +74,7 @@ public:
                 initFile << "author: " << username << "\n";
                 initFile << "email: " << email << "\n";
                 initFile.close();
+                cout<<"Setting the directories ...\n";
                 cout << "Spectre repository Initialized in " << p << "\n";
             } else {
                 cerr << "Failed to initialize Spectre repository in " << p << "\n";
@@ -81,7 +87,7 @@ public:
             spectreIgnore << ".spectre\n";
             spectreIgnore.close();
         }
-} 
+    }  
 
 
     map<std::string, std::string> getInfo() {
@@ -149,7 +155,6 @@ public:
         return decompressedContent;
     }
 
-  
     std::vector<std::string> getChangedFiles() {
         set<string> ignoreFiles;
         std::ifstream ignoreFile(".spectreignore");
@@ -158,18 +163,19 @@ public:
             ignoreFiles.insert(line);
         }
         std::vector<std::string> changedFiles;
-        for (const auto& entry : std::filesystem::directory_iterator(std::filesystem::current_path())) {
-            if (entry.is_regular_file() && ignoreFiles.find(entry.path().filename().string()) == ignoreFiles.end()) {
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(std::filesystem::current_path())) {
+            if (entry.is_regular_file() && ignoreFiles.find(entry.path().filename().string()) == ignoreFiles.end() && entry.path().string().find(".spectre") == std::string::npos) {
+                std::string relativePath = std::filesystem::relative(entry.path(), std::filesystem::current_path()).string();
                 std::string hash = hashFile(entry.path());
-                std::string stagedHash = hashFile(".spectre/.stage/" + entry.path().filename().string());
-                cout<<stagedHash<<"\n";
+                std::string stagedHash = hashFile(".spectre/.stage/" + relativePath);
                 if (hash != stagedHash) {
-                    changedFiles.push_back(entry.path().filename().string());
+                    changedFiles.push_back(relativePath);
                 }
             }
         }
         return changedFiles;
     }
+
 
     bool isIgnored(const std::string& file) {
         std::ifstream ignoreFile(".spectreignore");
@@ -307,6 +313,7 @@ public:
         outFile.write(outData.data(), outData.size());
     } 
 
+
     std::vector<std::string> getStagedFiles() {
         std::vector<std::string> unchangedFiles;
         std::filesystem::path stageDir(".spectre/.stage");
@@ -315,10 +322,11 @@ public:
             return unchangedFiles;
         }
 
-        for (const auto& entry : std::filesystem::directory_iterator(stageDir)) {
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(stageDir)) {
             if (entry.is_regular_file()) {
                 std::string stagedFilePath = entry.path().string();
-                std::string currentFilePath = entry.path().filename().string();
+                std::string relativePath = std::filesystem::relative(entry.path(), stageDir).string();
+                std::string currentFilePath = relativePath;
                 std::string stagedFileHash = hashFile(stagedFilePath);
                 std::string currentFileHash = hashFile(currentFilePath);
                 if (stagedFileHash == currentFileHash) {
@@ -329,6 +337,7 @@ public:
 
         return unchangedFiles;
     }
+
 
     void compressDirectory(const std::filesystem::path& directory) {
         for(auto& p: std::filesystem::recursive_directory_iterator(directory)) {
